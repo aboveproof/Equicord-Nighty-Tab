@@ -15,7 +15,7 @@ import { classes } from "@utils/misc";
 import definePlugin, { OptionType, PluginNative } from "@utils/types";
 import { Message } from "@vencord/discord-types";
 import { findByCodeLazy, findComponentByCodeLazy } from "@webpack";
-import { ChannelStore, Menu, MessageActions, SelectedChannelStore, useEffect, useStateFromStores } from "@webpack/common";
+import { ChannelStore, Menu, MessageActions, SelectedChannelStore, useEffect, useState, useStateFromStores } from "@webpack/common";
 import type { ReactElement } from "react";
 
 const Native = IS_DISCORD_DESKTOP
@@ -26,6 +26,7 @@ const NIGHTY_ROUTE = "/nighty";
 const NIGHTY_ITEM_ID = "nighty";
 const cl = classNameFactory("vc-nighty-tab-");
 const SETTINGS_KEYS = ["url"] as const;
+const ICON_SETTINGS_KEYS = ["iconType", "customIconUrl"] as const;
 
 const settings = definePluginSettings({
     url: {
@@ -41,6 +42,36 @@ const settings = definePluginSettings({
                 if (url.protocol === "https:" || url.protocol === "http:") return true;
             } catch { /* invalid URL */ }
             return "Use an http or https URL";
+        }
+    },
+    iconType: {
+        type: OptionType.SELECT,
+        description: "Select the sidebar and menu icon style.",
+        displayName: "Tab Icon Style",
+        options: [
+            { label: "Neon Blue (Default)", value: "blue", default: true },
+            { label: "Grayscale (Original)", value: "grayscale" },
+            { label: "Custom Image URL", value: "custom" }
+        ]
+    },
+    customIconUrl: {
+        type: OptionType.STRING,
+        description: "Direct image link (PNG, JPG, SVG, WebP) for the tab icon.",
+        displayName: "Custom Icon URL",
+        placeholder: "https://...",
+        default: "",
+        hidden() {
+            return this.store.iconType !== "custom";
+        },
+        isValid(value: string) {
+            if (this.store.iconType !== "custom") return true;
+            const trimmed = value.trim();
+            if (trimmed === "") return "Enter a valid image URL";
+            try {
+                const url = new URL(trimmed);
+                if (url.protocol === "https:" || url.protocol === "http:") return true;
+            } catch { /* invalid */ }
+            return "Use an http or https image URL";
         }
     },
     scriptUtils: {
@@ -80,10 +111,20 @@ function pageUrl(value: string | undefined): string | null {
         return null;
     }
 }
-import iconBase64 from "file://./asset/icon.png?base64";
+import blueIconBase64 from "file://./asset/icon.png?base64";
+import grayscaleIconBase64 from "file://./asset/icon-grayscale.png?base64";
 
-const NIGHTY_ICON = `data:image/png;base64,${iconBase64}`;
+const BLUE_ICON = `data:image/png;base64,${blueIconBase64}`;
+const GRAYSCALE_ICON = `data:image/png;base64,${grayscaleIconBase64}`;
 
+function getNightyIcon(iconType: string | undefined, customUrl: string | undefined): string {
+    if (iconType === "grayscale") return GRAYSCALE_ICON;
+    if (iconType === "custom") {
+        const trimmed = (customUrl ?? "").trim();
+        if (trimmed !== "") return trimmed;
+    }
+    return BLUE_ICON;
+}
 
 interface LinkIconProps {
     className?: string;
@@ -123,6 +164,15 @@ const usePrivateChannelListItem: (id: string) => PrivateChannelListItem = findBy
 );
 
 function NightyIcon({ className }: LinkIconProps) {
+    const { iconType, customIconUrl } = settings.use(ICON_SETTINGS_KEYS);
+    const iconSrc = getNightyIcon(iconType, customIconUrl);
+
+    useEffect(() => {
+        if (Native && iconType === "custom" && customIconUrl) {
+            void Native.allowEmbed(customIconUrl);
+        }
+    }, [iconType, customIconUrl]);
+
     return (
         <img
             alt=""
@@ -130,16 +180,19 @@ function NightyIcon({ className }: LinkIconProps) {
             className={classes(className, cl("icon"))}
             draggable={false}
             height={20}
-            src={NIGHTY_ICON}
+            src={iconSrc}
             width={20}
         />
     );
 }
 
 function NightyMenuIcon({ className, height = 20, width = 20 }: { className?: string; height?: number | string; width?: number | string; }) {
+    const { iconType, customIconUrl } = settings.use(ICON_SETTINGS_KEYS);
+    const iconSrc = getNightyIcon(iconType, customIconUrl);
+
     return (
         <svg aria-hidden="true" className={className} height={height} viewBox="0 0 24 24" width={width}>
-            <image height="18" href={NIGHTY_ICON} width="18" x="3" y="3" />
+            <image height="18" href={iconSrc} width="18" x="3" y="3" />
         </svg>
     );
 }
@@ -181,6 +234,11 @@ const messageContextMenuPatch: NavContextMenuPatchCallback = (children, { messag
 const NightyPage = ErrorBoundary.wrap(function NightyPage() {
     const { url } = settings.use(SETTINGS_KEYS);
     const src = pageUrl(url);
+    const [loaded, setLoaded] = useState(false);
+
+    useEffect(() => {
+        setLoaded(false);
+    }, [src]);
 
     useEffect(() => {
         if (Native && src !== null) void Native.allowEmbed(src);
@@ -209,8 +267,15 @@ const NightyPage = ErrorBoundary.wrap(function NightyPage() {
 
     return (
         <div className={cl("page")}>
+            {!loaded && (
+                <div className={cl("loader")}>
+                    <div className={cl("spinner")} />
+                    <span className={cl("loader-text")}>Loading Nighty...</span>
+                </div>
+            )}
             <iframe
-                className={cl("frame")}
+                className={classes(cl("frame"), !loaded && cl("frame-hidden"))}
+                onLoad={() => setLoaded(true)}
                 src={src}
                 title="Nighty"
             />
@@ -275,6 +340,9 @@ export default definePlugin({
     start() {
         const src = pageUrl(settings.store.url);
         if (Native && src !== null) void Native.allowEmbed(src);
+        if (Native && settings.store.iconType === "custom" && settings.store.customIconUrl) {
+            void Native.allowEmbed(settings.store.customIconUrl);
+        }
     },
 
     patches: [

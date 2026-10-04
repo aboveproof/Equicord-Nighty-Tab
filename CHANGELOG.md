@@ -21,6 +21,18 @@ All changes made to Nighty Tab Plugin and related Equicord integration files.
 - **Context Menu Grouping**: Placed the download script action inside a Discord `MenuGroup`.
 - **Default Prefix**: Set default prefix value to `"."` for script utilities.
 
+## Loading State and Performance
+
+- **Loading Spinner View**: Added an animated spinner and label overlay (`.vc-nighty-tab-loader`) during iframe page loads in `NightyPage`.
+- **Smooth Transition**: Added opacity transition on the iframe to prevent black screen flashes when switching to the tab.
+- **Connection Pre-warming**: Added `session.defaultSession.preconnect` in `native.ts` to resolve DNS and establish TLS connections on startup.
+
+## Icon Customization
+
+- **Grayscale Asset**: Restored original grayscale icon into `asset/icon-grayscale.png`.
+- **Icon Style Selector**: Added `iconType` setting with options for Neon Blue, Grayscale, and Custom Image URL.
+- **Custom URL Support**: Added `customIconUrl` setting with domain CSP allowlist integration for external image links.
+
 ## Assets and Branding
 
 - **External Asset Storage**: Moved icon data out of `index.tsx` into `asset/icon.png`.

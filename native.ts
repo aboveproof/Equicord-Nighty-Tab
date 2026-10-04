@@ -161,6 +161,10 @@ export function allowEmbed(_event: IpcMainInvokeEvent, url: unknown) {
         CspPolicies[host] = CSPSrc;
         registerHooks();
 
+        try {
+            session.defaultSession.preconnect({ url, numSockets: 2 });
+        } catch {}
+
         for (const win of BrowserWindow.getAllWindows()) {
             const frames = win.webContents.mainFrame?.frames ?? [];
             for (const frame of frames) {
