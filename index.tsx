@@ -7,6 +7,7 @@
 import "./style.css";
 
 import { findGroupChildrenByChildId, NavContextMenuPatchCallback } from "@api/ContextMenu";
+import { addServerListElement, removeServerListElement, ServerListRenderPosition } from "@api/ServerList";
 import { definePluginSettings, migratePluginSettings } from "@api/Settings";
 import ErrorBoundary from "@components/ErrorBoundary";
 import { classNameFactory } from "@utils/css";
@@ -15,8 +16,8 @@ import { classes } from "@utils/misc";
 import definePlugin, { OptionType, PluginNative } from "@utils/types";
 import { Message } from "@vencord/discord-types";
 import { findByCodeLazy, findComponentByCodeLazy } from "@webpack";
-import { ChannelStore, Menu, MessageActions, SelectedChannelStore, useEffect, useState, useStateFromStores } from "@webpack/common";
-import type { ReactElement } from "react";
+import { ChannelStore, Menu, MessageActions, NavigationRouter, SelectedChannelStore, useEffect, useState, useStateFromStores } from "@webpack/common";
+import type { MouseEvent, ReactElement } from "react";
 
 const Native = IS_DISCORD_DESKTOP
     ? VencordNative.pluginHelpers["Nighty Tab"] as PluginNative<typeof import("./native")>
@@ -43,6 +44,16 @@ const settings = definePluginSettings({
             } catch { /* invalid URL */ }
             return "Use an http or https URL";
         }
+    },
+    tabPlacement: {
+        type: OptionType.SELECT,
+        description: "Choose where the Nighty tab appears.",
+        displayName: "Tab Placement",
+        options: [
+            { label: "Home Sidebar (Under Quests)", value: "sidebar", default: true },
+            { label: "Server List (Guild Bar)", value: "guilds" },
+            { label: "Both Sidebar and Server List", value: "both" }
+        ]
     },
     iconType: {
         type: OptionType.SELECT,
@@ -283,7 +294,86 @@ const NightyPage = ErrorBoundary.wrap(function NightyPage() {
     );
 }, { noop: true });
 
+const GuildlessServerListItemComponent = findComponentByCodeLazy("tooltip:", "lowerBadgeSize:");
+const ServerListItemPillComponent = findComponentByCodeLazy("=!1,hovered:", "=!1,unread:", "=!1,disabled:");
+
+function NightyServerListIcon() {
+    const { iconType, customIconUrl } = settings.use(ICON_SETTINGS_KEYS);
+    const iconSrc = getNightyIcon(iconType, customIconUrl);
+
+    useEffect(() => {
+        if (Native && iconType === "custom" && customIconUrl) {
+            void Native.allowEmbed(customIconUrl);
+        }
+    }, [iconType, customIconUrl]);
+
+    return (
+        <img
+            alt=""
+            aria-hidden="true"
+            className={cl("guild-icon")}
+            draggable={false}
+            height={24}
+            src={iconSrc}
+            width={24}
+        />
+    );
+}
+
+const NightyGuildButton = ErrorBoundary.wrap(function NightyGuildButton() {
+    const { tabPlacement } = settings.use(["tabPlacement"]);
+    const isSelected = useStateFromStores(
+        [SelectedChannelStore],
+        () => window.location.pathname.startsWith(NIGHTY_ROUTE)
+    );
+    const [hovered, setHovered] = useState(false);
+
+    if (tabPlacement === "sidebar") return null;
+
+    const icon = (
+        <div className={cl("guild-icon-container")}>
+            <NightyServerListIcon />
+        </div>
+    );
+
+    return (
+        <div className={cl("guild-item-container")}>
+            <div className={cl("guild-item-pill")}>
+                <ServerListItemPillComponent
+                    unread={false}
+                    selected={isSelected}
+                    hovered={hovered}
+                    className={classes(
+                        cl("guild-pill"),
+                        isSelected && "selected",
+                        hovered && "hovered"
+                    )}
+                />
+            </div>
+            <div className={cl("guild-button-container")}>
+                <GuildlessServerListItemComponent
+                    icon={() => icon}
+                    tooltip="Nighty"
+                    showPill={false}
+                    selected={isSelected}
+                    className={cl("guild-button")}
+                    onClick={(e: MouseEvent<Element>) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        NavigationRouter.transitionTo(NIGHTY_ROUTE);
+                    }}
+                    onMouseEnter={() => setHovered(true)}
+                    onMouseLeave={() => setHovered(false)}
+                />
+            </div>
+        </div>
+    );
+}, { noop: true });
+
 const NightyTab = ErrorBoundary.wrap(function NightyTab() {
+    const { tabPlacement } = settings.use(["tabPlacement"]);
+    if (tabPlacement === "guilds") return null;
+
     const listItem = usePrivateChannelListItem(NIGHTY_ITEM_ID);
     const isSelected = useStateFromStores(
         [SelectedChannelStore],
@@ -316,7 +406,7 @@ export default definePlugin({
         }
     ],
     enabledByDefault: true,
-    dependencies: ["MessagePopoverAPI"],
+    dependencies: ["MessagePopoverAPI", "ServerListAPI"],
     settings,
     contextMenus: {
         message: messageContextMenuPatch
@@ -337,15 +427,30 @@ export default definePlugin({
         }
     },
 
+    renderGuildButton: ErrorBoundary.wrap(NightyGuildButton, { noop: true }),
+
     start() {
         const src = pageUrl(settings.store.url);
         if (Native && src !== null) void Native.allowEmbed(src);
         if (Native && settings.store.iconType === "custom" && settings.store.customIconUrl) {
             void Native.allowEmbed(settings.store.customIconUrl);
         }
+        addServerListElement(ServerListRenderPosition.Above, this.renderGuildButton);
+    },
+
+    stop() {
+        removeServerListElement(ServerListRenderPosition.Above, this.renderGuildButton);
     },
 
     patches: [
+        {
+            // Exports the guildless server list item component used by the guild bar button.
+            find: '="DOWNLOAD_APPS";function',
+            replacement: {
+                match: /(?<!GuildlessServerListItemComponent:\(\)=>\i,)(?=\i:\(\)=>\i.{0,30000}?asContainer:!\i.{0,50};let (\i)=\i.forwardRef\(function)/,
+                replace: "GuildlessServerListItemComponent:()=>$1,"
+            }
+        },
         {
             find: '"section-divider-top"',
             replacement: {

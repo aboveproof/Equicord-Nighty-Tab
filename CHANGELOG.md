@@ -38,3 +38,11 @@ All changes made to Nighty Tab Plugin and related Equicord integration files.
 - **External Asset Storage**: Moved icon data out of `index.tsx` into `asset/icon.png`.
 - **Custom Logo**: Replaced the icon with the blue ribbon logo.
 - **Build Loader**: Imported the icon through Equicord build loader `file://./asset/icon.png?base64`.
+
+## Tab Placement and Icon Updates
+
+- **Grayscale Asset Replacement**: Replaced `asset/icon-grayscale.png` with the user-provided 24x16 pixel icon.
+- **Tab Placement Setting**: Added `tabPlacement` setting with choices for Home Sidebar (under Quests), Server List (guild bar), and Both.
+- **Server Bar Guild Button**: Added `NightyGuildButton` rendered with `addServerListElement(ServerListRenderPosition.Above)`.
+- **Active Pill and Tooltip**: Integrated Discord's native indicator pill and tooltip for the server bar button. Selection highlights when viewing `/nighty`.
+
