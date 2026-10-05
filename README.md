@@ -16,6 +16,13 @@ Open Settings -> Plugins -> Nighty Tab:
 - **Script Utils functions**: Toggles the message context menu and popover actions.
 - **Nighty Prefix**: The prefix character prepended to the `dls` reply command (defaults to `.`).
 
+## 💖 Credits
+
+[<img src="https://github.com/xMimiez.png" width="80" height="80" alt="xMimiez" />](https://github.com/xMimiez)
+
+[xMimiez](https://github.com/xMimiez) (Mime | N0_.q3) built the original Nighty Tab plugin. This fork continues development from their codebase.
+
 ## License
 
-GNU General Public License v3.0 (GPL-3.0-or-later). See [LICENSE](./LICENSE).
+MIT License. See [LICENSE](./LICENSE).
+
